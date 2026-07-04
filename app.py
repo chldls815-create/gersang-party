@@ -70,8 +70,8 @@ def get_synced_data():
         if not any(str(p.get('Room_ID')) == str(lp['Room_ID']) and p.get('Nickname') == lp['Nickname'] for p in synced_parts):
             synced_parts.append(lp)
             
-    # 방 목록 병합 및 삭제된 방 숨김
-    synced_rooms = [r for r in g_rooms if str(r.get('Room_ID')) not in st.session_state.deleted_rooms]
+# 방 목록 병합 (삭제된 방 숨김 로직 제거)
+    synced_rooms = list(g_rooms) 
     for lr in st.session_state.local_rooms:
         if not any(str(r.get('Room_ID')) == str(lr['Room_ID']) for r in synced_rooms):
             synced_rooms.append(lr)
