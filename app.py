@@ -14,6 +14,7 @@ ROLES = {
 }
 
 scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive"]
+
 # [인증]
 if "GSPREAD_JSON" in st.secrets:
     creds_dict = json.loads(st.secrets["GSPREAD_JSON"])
@@ -58,16 +59,16 @@ for idx, room in enumerate(room_data):
         with st.expander(f"{room.get('Content_Name')} (방:{room.get('Room_ID')})", expanded=(selected_room_id == str(room.get('Room_ID')))):
             st.write(f"**상태:** {room.get('Status')} | **인원:** {room.get('Current_Players')} / {room.get('Max_Players')}")
             
-            # 파티원 명단
+            # 파티원 리스트 필터링
             current_members = [p for p in parts_data if str(p.get('Room_ID')) == str(room.get('Room_ID'))]
             if current_members:
                 st.table(pd.DataFrame(current_members)[['Nickname', 'Role']])
             
-            # [방 링크 표시]
+            # 파티 링크
             domain = st.secrets.get("DOMAIN_URL", "https://gersang-party-jhdzpnqxfbmpazvhaidmwu.streamlit.app")
             st.code(f"{domain}/?room={room.get('Room_ID')}", language=None)
             
-            # [역할 관리] - 파티장 제외, 이미 선택된 역할 제외
+            # [역할 중복 방지 로직]
             taken_roles = [p.get('Role') for p in current_members]
             available_roles = [r for r in ROLES.get(room.get('Content_Name'), []) if r != "파티장" and r not in taken_roles]
             
@@ -75,14 +76,23 @@ for idx, room in enumerate(room_data):
             with tab1:
                 nickname = st.text_input("닉네임", key=f"nick_{room.get('Room_ID')}")
                 role = st.selectbox("역할 선택", available_roles, key=f"role_{room.get('Room_ID')}")
+                
                 if st.button("참여하기", key=f"join_{room.get('Room_ID')}"):
-                    parts_sheet.append_row([room.get('Room_ID'), nickname, role])
-                    new_count = int(room.get('Current_Players')) + 1
-                    rooms_sheet.update_cell(idx + 2, 5, new_count)
-                    if new_count >= int(room.get('Max_Players')):
-                        rooms_sheet.update_cell(idx + 2, 6, "마감")
-                        send_discord_webhook(room.get('Room_ID'), room.get('Content_Name'), room.get('Leader_Name'), new_count, room.get('Max_Players'), "마감", parts_sheet.get_all_records())
-                    st.cache_data.clear(); st.rerun()
+                    if nickname and role:
+                        parts_sheet.append_row([room.get('Room_ID'), nickname, role])
+                        new_count = int(room.get('Current_Players')) + 1
+                        rooms_sheet.update_cell(idx + 2, 5, new_count)
+                        
+                        if new_count >= int(room.get('Max_Players')):
+                            rooms_sheet.update_cell(idx + 2, 6, "마감")
+                            send_discord_webhook(room.get('Room_ID'), room.get('Content_Name'), room.get('Leader_Name'), new_count, room.get('Max_Players'), "마감", parts_sheet.get_all_records())
+                        
+                        st.success("참여가 완료되었습니다!") # 완료 알림
+                        st.cache_data.clear()
+                        st.rerun() # 메인 화면으로 돌아가기(재실행)
+                    else:
+                        st.warning("닉네임과 역할을 모두 입력해주세요.")
+
             with tab2:
                 if st.button("방 삭제", key=f"del_{room.get('Room_ID')}"):
                     rooms_sheet.delete_rows(idx + 2)
