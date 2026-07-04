@@ -29,8 +29,6 @@ parts_sheet = sheet.worksheet("Participants")
 # [디스코드 알림]
 def send_discord_webhook(room_id, content_name, leader, current_players, max_players, message_type, parts_data):
     webhook_url = os.getenv("DISCORD_WEBHOOK", st.secrets.get("DISCORD_WEBHOOK", "YOUR_DISCORD_WEBHOOK_URL"))
-    
-    # 해당 방의 멤버만 필터링
     members = [p for p in parts_data if str(p.get('Room_ID')) == str(room_id)]
     member_list = "\n".join([f"- {m.get('Nickname', '???')} ({m.get('Role', '???')})" for m in members])
     
@@ -60,14 +58,18 @@ for idx, room in enumerate(room_data):
         with st.expander(f"{room.get('Content_Name')} (방:{room.get('Room_ID')})", expanded=(selected_room_id == str(room.get('Room_ID')))):
             st.write(f"**상태:** {room.get('Status')} | **인원:** {room.get('Current_Players')} / {room.get('Max_Players')}")
             
-            # 파티원 명단 표시
+            # 파티원 명단
             current_members = [p for p in parts_data if str(p.get('Room_ID')) == str(room.get('Room_ID'))]
             if current_members:
                 st.table(pd.DataFrame(current_members)[['Nickname', 'Role']])
             
-            # [역할 관리 로직]
+            # [방 링크 표시]
+            domain = st.secrets.get("DOMAIN_URL", "https://gersang-party-jhdzpnqxfbmpazvhaidmwu.streamlit.app")
+            st.code(f"{domain}/?room={room.get('Room_ID')}", language=None)
+            
+            # [역할 관리] - 파티장 제외, 이미 선택된 역할 제외
             taken_roles = [p.get('Role') for p in current_members]
-            available_roles = [r for r in ROLES.get(room.get('Content_Name'), []) if r not in taken_roles]
+            available_roles = [r for r in ROLES.get(room.get('Content_Name'), []) if r != "파티장" and r not in taken_roles]
             
             tab1, tab2 = st.tabs(["참여/탈퇴", "방 관리"])
             with tab1:
@@ -93,6 +95,6 @@ with st.sidebar:
     if st.button("방 생성"):
         new_id = len(room_data) + 1
         rooms_sheet.append_row([new_id, content, leader, len(ROLES[content]), 1, "모집중"])
-        parts_sheet.append_row([new_id, leader, "파티장"]) # 파티장 자동 등록
+        parts_sheet.append_row([new_id, leader, "파티장"])
         send_discord_webhook(new_id, content, leader, 1, len(ROLES[content]), "생성", parts_sheet.get_all_records())
         st.cache_data.clear(); st.rerun()
